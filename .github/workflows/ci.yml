@@ -2,7 +2,7 @@ name: CI — Develop
 
 on:
   push:
-    branches: [develop]
+    branches: [devlop]
 
 permissions:
   contents: read
@@ -111,7 +111,7 @@ jobs:
           if [ -z "$EXISTING" ]; then
             gh pr create \
               --base main \
-              --head develop \
+              --head devlop \
               --title "chore: merge develop → main" \
               --body "Tous les tests sont passés ✅ — PR créée automatiquement après le CI."
             echo "PR créée."
