@@ -29,13 +29,6 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: nextjs-build
-          path: .next/
-          retention-days: 1
-
   # ─── 2. TESTS COMPOSANTS ───────────────────────────────────────────────────
   component-tests:
     name: Component Tests
@@ -60,21 +53,15 @@ jobs:
   # ─── 3. TESTS E2E ──────────────────────────────────────────────────────────
   e2e-tests:
     name: E2E Tests
-    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: nextjs-build
-          path: .next/
-
       - name: Cypress E2E tests
         uses: cypress-io/github-action@v6
         with:
+          build: npm run build
           start: npm start
           wait-on: http://localhost:3000
           wait-on-timeout: 60
@@ -107,12 +94,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          EXISTING=$(gh pr list --base main --head develop --state open --json number --jq '.[0].number')
+          EXISTING=$(gh pr list --base main --head devlop --state open --json number --jq '.[0].number')
           if [ -z "$EXISTING" ]; then
             gh pr create \
               --base main \
               --head devlop \
-              --title "chore: merge develop → main" \
+              --title "chore: merge devlop → main" \
               --body "Tous les tests sont passés ✅ — PR créée automatiquement après le CI."
             echo "PR créée."
           else
