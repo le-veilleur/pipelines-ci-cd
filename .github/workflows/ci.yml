@@ -21,7 +21,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: npm                        # Cache node_modules via package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -37,12 +37,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache Cypress binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/Cypress
+          key: cypress-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: cypress-${{ runner.os }}-
+
       - name: Cypress component tests
         uses: cypress-io/github-action@v6
         with:
           component: true
 
-      - name: Upload screenshots si échec
+      - name: Upload screenshots
         uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -57,6 +64,13 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+
+      - name: Cache Cypress binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/Cypress
+          key: cypress-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: cypress-${{ runner.os }}-
 
       - name: Cypress E2E tests
         uses: cypress-io/github-action@v6
