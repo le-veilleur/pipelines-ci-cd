@@ -91,6 +91,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Créer la PR si elle n'existe pas
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
