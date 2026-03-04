@@ -49,12 +49,20 @@ jobs:
         with:
           component: true
 
-      - name: Upload screenshots
+      - name: Upload screenshots si échec
         uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: component-screenshots
           path: cypress/screenshots/
+          retention-days: 3
+
+      - name: Upload vidéos
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: component-videos
+          path: cypress/videos/
           retention-days: 3
 
   # ─── 3. TESTS E2E ──────────────────────────────────────────────────────────
