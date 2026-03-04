@@ -41,7 +41,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/Cypress
+          # Le cache est invalidé si package-lock.json change, ce qui est important pour les tests Cypress
           key: cypress-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          # Si le cache exact n'est pas trouvé, restaurer le plus récent pour ce runner OS
           restore-keys: cypress-${{ runner.os }}-
 
       - name: Cypress component tests
@@ -83,6 +85,10 @@ jobs:
           path: ~/.cache/Cypress
           key: cypress-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
           restore-keys: cypress-${{ runner.os }}-
+
+      - name: Install Firefox
+        if: matrix.browser == 'firefox'
+        uses: browser-actions/setup-firefox@v1
 
       - name: Cypress E2E tests (${{ matrix.browser }})
         uses: cypress-io/github-action@v6

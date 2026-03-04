@@ -13,6 +13,7 @@
 5. [Tests d'Intégration](#5-tests-dintégration)
 6. [Tests de Composants (Cypress)](#6-tests-de-composants-cypress)
 7. [Tests End-to-End E2E (Cypress)](#7-tests-end-to-end-e2e-cypress)
+   - [Matrice de navigateurs (Browser Matrix)](#matrice-de-navigateurs-browser-matrix)
 8. [Tests de Régression](#8-tests-de-régression)
 9. [Tests de Fumée (Smoke Tests)](#9-tests-de-fumée-smoke-tests)
 10. [Tests de Sanité (Sanity Tests)](#10-tests-de-sanité-sanity-tests)
@@ -648,7 +649,13 @@ describe("Navigation complète", () => {
 
 ```yaml
 e2e-tests:
+  name: E2E Tests (${{ matrix.browser }})
   runs-on: ubuntu-latest
+  timeout-minutes: 15
+  strategy:
+    fail-fast: false             # Continue les autres browsers si l'un échoue
+    matrix:
+      browser: [chrome, edge, firefox]
   steps:
     - uses: actions/checkout@v4
 
@@ -657,19 +664,22 @@ e2e-tests:
       with:
         path: ~/.cache/Cypress
         key: cypress-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+        restore-keys: cypress-${{ runner.os }}-
 
-    - name: Cypress E2E tests
+    - name: Cypress E2E tests (${{ matrix.browser }})
       uses: cypress-io/github-action@v6
       with:
         build: npm run build        # Build Next.js avant de lancer
         start: npm start            # Démarre le serveur
         wait-on: http://localhost:3000  # Attend que le serveur réponde
+        wait-on-timeout: 60
+        browser: ${{ matrix.browser }}  # Utilise la valeur de la matrice
 
     - name: Upload screenshots si échec
       uses: actions/upload-artifact@v4
       if: failure()
       with:
-        name: e2e-screenshots
+        name: e2e-screenshots-${{ matrix.browser }}   # Nom unique par browser
         path: cypress/screenshots/
         retention-days: 7
 
@@ -677,9 +687,138 @@ e2e-tests:
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: e2e-videos
+        name: e2e-videos-${{ matrix.browser }}         # Nom unique par browser
         path: cypress/videos/
         retention-days: 7
+```
+
+---
+
+### Matrice de navigateurs (Browser Matrix)
+
+#### Pourquoi tester sur plusieurs navigateurs ?
+
+Un test qui passe sur Chrome peut échouer sur Firefox à cause de :
+- Différences de rendu CSS
+- Support des APIs JavaScript (ex: `IntersectionObserver`, `fetch`)
+- Comportement des formulaires ou des événements clavier
+
+```
+Chrome  → Moteur Blink  → ~65% des utilisateurs
+Edge    → Moteur Blink  → ~4% des utilisateurs
+Firefox → Moteur Gecko  → ~3% des utilisateurs
+```
+
+#### Comment fonctionne `strategy.matrix`
+
+GitHub Actions génère automatiquement **un job par valeur** de la matrice et les exécute **en parallèle**.
+
+```yaml
+strategy:
+  matrix:
+    browser: [chrome, edge, firefox]
+```
+
+Ceci crée 3 jobs distincts :
+
+```
+e2e-tests (chrome)   ─┐
+e2e-tests (edge)     ─┼─ s'exécutent en parallèle
+e2e-tests (firefox)  ─┘
+```
+
+Pour référencer la valeur courante dans un step, on utilise `${{ matrix.browser }}` :
+
+```yaml
+- name: Cypress E2E tests (${{ matrix.browser }})  # Nom du step dans l'UI
+  uses: cypress-io/github-action@v6
+  with:
+    browser: ${{ matrix.browser }}                 # Passe le navigateur à Cypress
+```
+
+#### `fail-fast: false` — comportement par défaut vs configuré
+
+```yaml
+# Comportement par défaut (fail-fast: true)
+# Si chrome échoue → edge et firefox sont annulés immédiatement
+strategy:
+  matrix:
+    browser: [chrome, edge, firefox]
+
+# Comportement configuré (fail-fast: false)
+# Si chrome échoue → edge et firefox continuent quand même
+strategy:
+  fail-fast: false
+  matrix:
+    browser: [chrome, edge, firefox]
+```
+
+**Quand utiliser `fail-fast: false` ?**
+
+```
+fail-fast: true   → Économise du temps/crédits. Utile si les browsers
+                    testent la même chose et qu'un échec = tout casser.
+
+fail-fast: false  → Donne un rapport complet sur tous les browsers.
+                    Utile pour diagnostiquer des bugs spécifiques à un browser.
+```
+
+#### Nommer les artefacts par browser
+
+Sans suffixe `${{ matrix.browser }}`, les 3 jobs tenteraient d'uploader
+un artefact avec le même nom → collision et échec.
+
+```yaml
+# ❌ Collision : 3 jobs uploadent "e2e-screenshots"
+name: e2e-screenshots
+
+# ✅ Noms uniques par browser
+name: e2e-screenshots-${{ matrix.browser }}
+# → e2e-screenshots-chrome
+# → e2e-screenshots-edge
+# → e2e-screenshots-firefox
+```
+
+#### Résultat dans l'UI GitHub Actions
+
+```
+GitHub Actions Run #42
+├── Jobs
+│   ├── ✅ Build
+│   ├── ✅ Component Tests
+│   ├── ✅ E2E Tests (chrome)
+│   ├── ✅ E2E Tests (edge)
+│   └── ❌ E2E Tests (firefox)    ← Seulement Firefox échoue
+│
+└── Artifacts
+    ├── e2e-screenshots-firefox.zip  ← Screenshots de l'échec Firefox
+    ├── e2e-videos-chrome.zip
+    ├── e2e-videos-edge.zip
+    └── e2e-videos-firefox.zip
+```
+
+#### Matrice étendue — combiner plusieurs dimensions
+
+On peut croiser plusieurs variables pour créer une matrice 2D :
+
+```yaml
+strategy:
+  matrix:
+    browser: [chrome, firefox]
+    viewport: [desktop, mobile]
+# → 4 jobs : chrome/desktop, chrome/mobile, firefox/desktop, firefox/mobile
+```
+
+#### Exclure certaines combinaisons
+
+```yaml
+strategy:
+  matrix:
+    browser: [chrome, edge, firefox]
+    os: [ubuntu-latest, windows-latest]
+  exclude:
+    - browser: firefox
+      os: windows-latest    # Firefox sur Windows exclus
 ```
 
 ### Bonnes pratiques
