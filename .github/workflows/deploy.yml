@@ -1,0 +1,42 @@
+name: Deploy — Production VPS
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            set -e
+
+            cd /var/www/cours-ci-cd
+
+            echo "→ Pull du code..."
+            git pull origin main
+
+            echo "→ Installation des dépendances..."
+            npm ci --omit=dev
+
+            echo "→ Build..."
+            npm run build
+
+            echo "→ Redémarrage de l'application..."
+            pm2 restart cours-ci-cd --update-env
+
+            echo "✅ Déploiement terminé."

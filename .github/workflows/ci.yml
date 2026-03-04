@@ -1,0 +1,120 @@
+name: CI — Develop
+
+on:
+  push:
+    branches: [develop]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # ─── 1. BUILD ──────────────────────────────────────────────────────────────
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextjs-build
+          path: .next/
+          retention-days: 1
+
+  # ─── 2. TESTS COMPOSANTS ───────────────────────────────────────────────────
+  component-tests:
+    name: Component Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cypress component tests
+        uses: cypress-io/github-action@v6
+        with:
+          component: true
+
+      - name: Upload screenshots si échec
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: component-screenshots
+          path: cypress/screenshots/
+          retention-days: 3
+
+  # ─── 3. TESTS E2E ──────────────────────────────────────────────────────────
+  e2e-tests:
+    name: E2E Tests
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nextjs-build
+          path: .next/
+
+      - name: Cypress E2E tests
+        uses: cypress-io/github-action@v6
+        with:
+          start: npm start
+          wait-on: http://localhost:3000
+          wait-on-timeout: 60
+
+      - name: Upload screenshots si échec
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-screenshots
+          path: cypress/screenshots/
+          retention-days: 7
+
+      - name: Upload vidéos
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-videos
+          path: cypress/videos/
+          retention-days: 7
+
+  # ─── 4. PULL REQUEST AUTOMATIQUE VERS MAIN ─────────────────────────────────
+  open-pr:
+    name: Open PR → main
+    needs: [build, component-tests, e2e-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Créer la PR si elle n'existe pas
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          EXISTING=$(gh pr list --base main --head develop --state open --json number --jq '.[0].number')
+          if [ -z "$EXISTING" ]; then
+            gh pr create \
+              --base main \
+              --head develop \
+              --title "chore: merge develop → main" \
+              --body "Tous les tests sont passés ✅ — PR créée automatiquement après le CI."
+            echo "PR créée."
+          else
+            echo "PR #$EXISTING déjà ouverte, rien à faire."
+          fi
